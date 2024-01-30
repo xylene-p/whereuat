@@ -24,7 +24,7 @@ function App() {
       {showDisplay && <DisplayComponent onConfirm={handleConfirm} />}
       {showConfirmation && <ConfirmationComponent onConfirm={handleConfirm} />}
       <h1><a href="https://partiful.com">later</a></h1>
-      <footer>made with every fiber of my <a href="https://instagram.com/kaperez__">being</a> and a dash of love</footer>
+      <footer>made with every fiber of my <a href="https://instagram.com/kaperez__">being</a> and a bit of love</footer>
     </div>
   );
 }
