@@ -16,6 +16,7 @@ const LocationComponent: React.FC = () => {
   const [inputAddress, setInputAddress] = useState<string>('');
   const [watching, setWatching] = useState<boolean>(false);
   const [neighborhoodEnabled, setNeighborhoodEnabled] = useState<boolean>(true);
+  const [distanceEnabled, setDistanceEnabled] = useState<boolean>(true); 
 
   useEffect(() => {
     // Start watching for location updates when the component mounts
@@ -108,6 +109,10 @@ const LocationComponent: React.FC = () => {
     setNeighborhoodEnabled((prev) => !prev);
   };
 
+  const toggleDistanceComponent = () => {
+    setDistanceEnabled((prev) => !prev);
+  };
+
   return (
     <div>
       <GeofenceComponent setOtherUserLocation={setOtherUserLocation} />
@@ -159,7 +164,12 @@ const LocationComponent: React.FC = () => {
 
       <div>
         <button onClick={toggleNeighborhood}>Toggle Neighborhood Identification</button>
+        <button onClick={toggleDistanceComponent}>
+          {distanceEnabled ? 'Disable Distance Component' : 'Enable Distance Component'}
+        </button>
       </div>
+
+      {distanceEnabled && <DistanceComponent origin={location || { latitude: 0, longitude: 0 }} destination={otherUserLocation || { latitude: 0, longitude: 0 }} />}
     </div>
   );
 };
