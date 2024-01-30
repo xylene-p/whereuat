@@ -1,6 +1,4 @@
 // ClickableComponent.js
-import React, { useState } from 'react';
-
 const ClickableComponent = ({ onClick }: { onClick: () => void }) => {
   return (
     <div>
