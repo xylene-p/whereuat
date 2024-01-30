@@ -1,102 +1,165 @@
 // LocationComponent.tsx
-import secrets from './secrets';
 import React, { useState, useEffect, ChangeEvent } from 'react';
+import secrets from './secrets';
+import GeofenceComponent from './GeofenceComponent';
+import NeighborhoodComponent from './NeighborhoodComponent';
+import DistanceComponent from './DistanceComponent';
 
 const LocationComponent: React.FC = () => {
-  const [location, setLocation] = useState<{ latitude: number; longitude: number; neighborhood?: string } | null>(null);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [otherUserLocation, setOtherUserLocation] = useState<{ latitude: number; longitude: number } | null>({
+    latitude: 37.7749, // Example latitude for another user
+    longitude: -122.4194, // Example longitude for another user
+  });
+  const [geofenceRadius, setGeofenceRadius] = useState<number>(1000); // Default geofence radius is 1000 meters
   const [error, setError] = useState<string | null>(null);
-  const [inputLatitude, setInputLatitude] = useState<string>('');
-  const [inputLongitude, setInputLongitude] = useState<string>('');
+  const [inputAddress, setInputAddress] = useState<string>('');
+  const [watching, setWatching] = useState<boolean>(false);
+  const [neighborhoodEnabled, setNeighborhoodEnabled] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check if Geolocation is supported by the browser
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
+    // Start watching for location updates when the component mounts
+    if (watching) {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
           const userLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           };
-
-          // Use reverse geocoding to get neighborhood information
-          try {
-            const neighborhood = await getNeighborhood(userLocation);
-            setLocation({ ...userLocation, neighborhood });
-          } catch (error) {
-            setError(`Error getting neighborhood: ${(error as Error).message}`);
-          }
+          setLocation(userLocation);
         },
         (error) => {
           setError(`Error getting location: ${error.message}`);
         }
       );
-    } else {
-      setError('Geolocation is not supported by your browser.');
+
+      // Cleanup the watch when the component unmounts or when watching is stopped
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+      };
     }
-  }, []);
+  }, [watching]);
 
-  const handleLatitudeChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setInputLatitude(event.target.value);
+  const handleAddressChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setInputAddress(event.target.value);
   };
 
-  const handleLongitudeChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setInputLongitude(event.target.value);
-  };
-
-  const simulateLocation = async () => {
-    const simulatedLocation = {
-      latitude: parseFloat(inputLatitude),
-      longitude: parseFloat(inputLongitude),
-    };
-
+  const getCoordinatesFromAddress = async () => {
     try {
-      const neighborhood = await getNeighborhood(simulatedLocation);
-      setLocation({ ...simulatedLocation, neighborhood });
+      const coordinates = await geocodeAddress(inputAddress);
+      setLocation({ ...coordinates });
     } catch (error) {
-      setError(`Error getting neighborhood: ${(error as Error).message}`);
+      setError(`Error getting location: ${(error as Error).message}`);
     }
   };
 
-  const getNeighborhood = async (coordinates: { latitude: number; longitude: number }): Promise<string | undefined> => {
+  const geocodeAddress = async (address: string): Promise<{ latitude: number; longitude: number }> => {
     const apiKey = secrets.googleMapsApiKey;
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinates.latitude},${coordinates.longitude}&key=${apiKey}`
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
     );
 
-    console.log("getting neighborhood");
     const data = await response.json();
 
     if (data.results && data.results.length > 0) {
-      // Extract neighborhood name from the results
-      const addressComponents = data.results[0].address_components;
-      const neighborhood = addressComponents.find((component: any) => component.types.includes('neighborhood'));
-      return neighborhood ? neighborhood.long_name : undefined;
+      const locationInfo = data.results[0].geometry.location;
+      const coordinates = {
+        latitude: locationInfo.lat,
+        longitude: locationInfo.lng,
+      };
+      return coordinates;
     } else {
-      return undefined;
+      throw new Error('No results found for the provided address.');
     }
+  };
+
+  const isOtherUserWithinGeofence = (): boolean => {
+    if (location && otherUserLocation) {
+      // Calculate distance between the two locations
+      const distance = getDistance(location, otherUserLocation);
+
+      // Check if the distance is within the geofence radius specified by the first user
+      return distance <= geofenceRadius;
+    }
+
+    return false;
+  };
+
+  const getDistance = (coord1: { latitude: number; longitude: number }, coord2: { latitude: number; longitude: number }): number => {
+    const latDiff = coord2.latitude - coord1.latitude;
+    const lonDiff = coord2.longitude - coord1.longitude;
+    return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
+  };
+
+  const startWatching = () => {
+    setWatching(true);
+  };
+
+  const stopWatching = () => {
+    setWatching(false);
+  };
+
+  const handleGeofenceRadiusChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const radius = parseInt(event.target.value, 10);
+    setGeofenceRadius(isNaN(radius) ? 0 : radius);
+  };
+
+  const toggleNeighborhood = () => {
+    setNeighborhoodEnabled((prev) => !prev);
   };
 
   return (
     <div>
+      <GeofenceComponent setOtherUserLocation={setOtherUserLocation} />
+
+      <div>
+        <label>
+          Enter Address:
+          <input type="text" value={inputAddress} onChange={handleAddressChange} />
+        </label>
+        <button onClick={getCoordinatesFromAddress}>Get Location</button>
+      </div>
+
+      <div>
+        <label>
+          Set Geofence Radius (meters):
+          <input type="text" value={geofenceRadius} onChange={handleGeofenceRadiusChange} />
+        </label>
+      </div>
+
+      <div>
+        <button onClick={startWatching}>Start Updating Location</button>
+        <button onClick={stopWatching}>Stop Updating Location</button>
+      </div>
+
       {location && (
         <div>
           <p>Latitude: {location.latitude}</p>
           <p>Longitude: {location.longitude}</p>
-          {location.neighborhood && <p>Neighborhood: {location.neighborhood}</p>}
         </div>
       )}
+
+      {otherUserLocation && (
+        <div>
+          <p>Other User's Location:</p>
+          <p>Latitude: {otherUserLocation.latitude}</p>
+          <p>Longitude: {otherUserLocation.longitude}</p>
+        </div>
+      )}
+
+      <NeighborhoodComponent coordinates={location || { latitude: 0, longitude: 0 }} isEnabled={neighborhoodEnabled} />
+
+      {isOtherUserWithinGeofence() ? (
+        <p>Other user is within the specified geofence!</p>
+      ) : (
+        <p>Other user is outside the specified geofence.</p>
+      )}
+
+      <DistanceComponent origin={location || { latitude: 0, longitude: 0 }} destination={otherUserLocation || { latitude: 0, longitude: 0 }} />
+
       <div>
-        <label>
-          Simulate Latitude:
-          <input type="text" value={inputLatitude} onChange={handleLatitudeChange} />
-        </label>
-        <label>
-          Simulate Longitude:
-          <input type="text" value={inputLongitude} onChange={handleLongitudeChange} />
-        </label>
-        <button onClick={simulateLocation}>Simulate Location</button>
+        <button onClick={toggleNeighborhood}>Toggle Neighborhood Identification</button>
       </div>
-      {error && <p>{error}</p>}
     </div>
   );
 };
